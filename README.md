@@ -34,7 +34,7 @@ Sur le téléphone : ouvrir l'adresse du site puis « Ajouter à l'écran d'accu
 - Couleur selon des repères wingfoil (en nœuds) : moins de 8, 8 à 12, 12 à 18 (idéal), 18 à 25, 25 à 32, plus de 32.
 - Onshore, side-shore ou offshore, calculé pour la côte belge (mer au nord-ouest).
 - Unités au choix : nœuds, m/s, km/h, Beaufort. Actualisation automatique toutes les 5 minutes.
-- Choix des stations affichées (mémorisé dans le navigateur), puis l'historique sur 3 h, 6 h, 12 h, 24 h, 48 h, 72 h ou 7 jours (au choix, mémorisé) : d'abord le vent de chaque station (rafales et flèches de direction heure par heure), puis la houle, sur une même échelle pour comparer. Une infobulle donne les valeurs exactes au survol (souris, doigt ou stylet).
+- Deux listes de choix indépendantes, vent et houle, qui reprennent toutes les stations de la source mesurant ce paramètre (mémorisées dans le navigateur), puis l'historique sur 3 h, 6 h, 12 h, 24 h, 48 h, 72 h ou 7 jours (au choix, mémorisé) : d'abord le vent de chaque station (rafales et flèches de direction heure par heure), puis la houle, sur une même échelle pour comparer. Une infobulle donne les valeurs exactes au survol (souris, doigt ou stylet).
 
 ## Architecture
 

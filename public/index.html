@@ -112,7 +112,8 @@ table.readings { width: 100%; border-collapse: collapse; font-variant-numeric: t
 .toggle[aria-pressed="true"] .box::after { content: ""; width: 7px; height: 4px; border: 2px solid var(--surface); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
 .toggle:focus-visible, .linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .history { display: grid; gap: 14px; }
-.now-sub { font: 600 .75rem var(--font-body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 6px 0 -2px; }
+.sub-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-top: 6px; }
+.now-sub { font: 600 .75rem var(--font-body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
 .section-title { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; margin: 8px 0 0; }
 .history-title { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; margin: 4px 0 0; }
 
@@ -194,20 +195,34 @@ footer a { color: var(--accent); }
   <section class="now" aria-label="Derniers relevés">
     <div class="now-head">
       <h2 class="now-title">Derniers relevés</h2>
-      <details class="picker" id="picker">
-        <summary id="picker-summary">Choisir les stations</summary>
+    </div>
+    <div class="sub-head">
+      <h3 class="now-sub">Vent</h3>
+      <details class="picker" id="picker-wind" data-kind="wind">
+        <summary>Choisir les stations</summary>
         <div class="picker-body">
           <div class="picker-head">
-            <button type="button" class="linkbtn" id="pick-all">Toutes</button>
-            <button type="button" class="linkbtn" id="pick-none">Aucune</button>
+            <button type="button" class="linkbtn" id="wind-all" data-act="all">Toutes</button>
+            <button type="button" class="linkbtn" id="wind-none" data-act="none">Aucune</button>
           </div>
-          <div class="toggles" id="toggles"></div>
+          <div class="toggles"></div>
         </div>
       </details>
     </div>
-    <h3 class="now-sub">Vent</h3>
     <div class="table-box" id="grid"></div>
-    <h3 class="now-sub">Houle</h3>
+    <div class="sub-head">
+      <h3 class="now-sub">Houle</h3>
+      <details class="picker" id="picker-wave" data-kind="wave">
+        <summary>Choisir les stations</summary>
+        <div class="picker-body">
+          <div class="picker-head">
+            <button type="button" class="linkbtn" id="wave-all" data-act="all">Toutes</button>
+            <button type="button" class="linkbtn" id="wave-none" data-act="none">Aucune</button>
+          </div>
+          <div class="toggles"></div>
+        </div>
+      </details>
+    </div>
     <div class="table-box" id="waves"></div>
   </section>
   <section class="history" aria-labelledby="h-wind"><h2 class="section-title" id="h-wind">Historique du vent</h2><div class="history" id="history"></div></section>
@@ -230,14 +245,17 @@ footer a { color: var(--accent); }
     get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
-  const state = { unit: store.get('mm-unit', 'kn'), sort: store.get('mm-sort', 'wind'), visible: loadVisible(), hours: [3, 6, 12, 24, 48, 72, 168].includes(+store.get('mm-hours', 24)) ? +store.get('mm-hours', 24) : 24, data: null, demo: false };
+  const state = { unit: store.get('mm-unit', 'kn'), sort: store.get('mm-sort', 'wind'), vis: { wind: loadVisible('wind'), wave: loadVisible('wave') }, hours: [3, 6, 12, 24, 48, 72, 168].includes(+store.get('mm-hours', 24)) ? +store.get('mm-hours', 24) : 24, data: null, demo: false };
 
   // Stations choisies : liste de clés mémorisée ; null = toutes.
-  function loadVisible() {
-    try { const v = JSON.parse(store.get('mm-visible', 'null')); return Array.isArray(v) ? new Set(v) : null; } catch { return null; }
+  // Deux listes indépendantes : stations de vent et stations de houle.
+  function loadVisible(kind) {
+    try { const v = JSON.parse(store.get('mm-visible-' + kind, 'null')); return Array.isArray(v) ? new Set(v) : null; } catch { return null; }
   }
-  function saveVisible() { store.set('mm-visible', JSON.stringify(state.visible ? [...state.visible] : null)); }
-  const isVisible = st => !state.visible || state.visible.has(st.key);
+  function saveVisible(kind) { store.set('mm-visible-' + kind, JSON.stringify(state.vis[kind] ? [...state.vis[kind]] : null)); }
+  const isVisible = (st, kind) => !state.vis[kind] || state.vis[kind].has(st.key);
+  const hasWind = st => ['wind_speed', 'wind_gust', 'wind_dir'].some(q => val(st, q) != null);
+  const hasWave = st => ['wave_height', 'wave_h10', 'wave_period'].some(q => val(st, q) != null);
 
   // ---------- Unités et échelles ----------
   const UNITS = {
@@ -284,12 +302,16 @@ footer a { color: var(--accent); }
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   // ---------- Données de démonstration (si aucun serveur ne répond) ----------
+  const DEMO_STATIONS = [
+    ['NPT', 'Nieuwpoort', 1.0, 'w'], ['OST', 'Oostende', 0.95, 'w'], ['ZBR', 'Zeebrugge', 0.9, 'w'], ['BLB', 'Blankenberge', 0.92, 'w'],
+    ['WHI', 'Westhinder', 1.35, 'wv'], ['WDL', 'Wandelaar', 1.2, 'wv'], ['AKK', 'Akkaert', 1.25, 'wv'],
+    ['BVH', 'Bol van Heist', 1.05, 'v'], ['SWI', 'Scheur Wielingen', 1.0, 'v'], ['TRG', 'Trapegeer', 1.1, 'v'],
+    ['KWI', 'Kwintebank', 1.15, 'v'], ['ODY', 'Oostdyck', 1.3, 'v'], ['RAV', 'Raversijde', 0.95, 'v'], ['WEN', 'Wenduine', 0.95, 'v'],
+  ].map(([id, name, exposure, m]) => ({ id, name: name + ' (démo)', exposure, wind: m.includes('w'), wave: m.includes('v') }));
+  const WIND_Q = ['wind_speed', 'wind_gust', 'wind_dir', 'air_temp'];
   function demoData(hours) {
-    const STATIONS = [
-      { id: 'NPT', name: 'Nieuwpoort (démo)', exposure: 1.0 }, { id: 'OST', name: 'Oostende (démo)', exposure: 0.95 },
-      { id: 'WDL', name: 'Wandelaar (démo)', exposure: 1.2 }, { id: 'ZBR', name: 'Zeebrugge (démo)', exposure: 0.9 },
-      { id: 'WHI', name: 'Westhinder (démo)', exposure: 1.35 },
-    ];
+    // Liste illustrative de stations de la côte belge : certaines mesurent le vent (w), d'autres la houle (v), parfois les deux.
+    const STATIONS = DEMO_STATIONS;
     const noise = s => { const x = Math.sin(s * 12.9898) * 43758.5453; return x - Math.floor(x); };
     function sample(st, t) {
       const h = t / 3600e3, k = st.id.charCodeAt(0) + st.id.charCodeAt(2);
@@ -310,8 +332,9 @@ footer a { color: var(--accent); }
                 { id: 'meetnet', name: 'Meetnet Vlaamse Banken', status: 'unconfigured', url: 'https://meetnetvlaamsebanken.be' }],
       stations: STATIONS.map(st => {
         const latest = {}, series = {};
-        for (const [q, v] of Object.entries(sample(st, now))) latest[q] = { value: v, time: new Date(now).toISOString() };
-        for (const q of ['wind_speed', 'wind_gust', 'wind_dir', 'wave_height', 'wave_h10']) {
+        const keep = q => WIND_Q.includes(q) ? st.wind : st.wave;
+        for (const [q, v] of Object.entries(sample(st, now))) if (keep(q)) latest[q] = { value: v, time: new Date(now).toISOString() };
+        for (const q of ['wind_speed', 'wind_gust', 'wind_dir', 'wave_height', 'wave_h10'].filter(keep)) {
           series[q] = [];
           for (let t = now - hours * 3600e3; t <= now; t += 600e3) series[q].push([new Date(t).toISOString(), sample(st, t)[q]]);
         }
@@ -383,7 +406,7 @@ footer a { color: var(--accent); }
       <td class="opt">${s != null ? `<span class="pill band">${b.name}</span>` : ''}</td>
       <td>${d != null ? `<span class="dirc">${arrow}<span>${cardinal(d)} <span class="m">${Math.round(d)}°</span></span></span>` : '–'}</td>
       <td>${ex ? `<span class="pill ${ex.cls}">${ex.name}</span>` : '–'}</td>
-      <td><span class="m">${at != null ? at.toFixed(1) + ' °C' : '–'}</span></td>
+      <td class="opt"><span class="m">${at != null ? at.toFixed(1) + ' °C' : '–'}</span></td>
       <td class="age opt">${times.length ? ago(times.at(-1)) : '–'}</td>
     </tr>`;
   }
@@ -503,34 +526,40 @@ footer a { color: var(--accent); }
 
     const stations = [...d.stations].sort((a, b) => state.sort === 'name'
       ? a.name.localeCompare(b.name, 'fr') : (val(b, 'wind_speed') ?? -1) - (val(a, 'wind_speed') ?? -1));
-    // Sélecteur de stations (ordre alphabétique, indépendant du tri des cartes)
-    document.getElementById('picker-summary').textContent = `Choisir les stations (${d.stations.filter(isVisible).length} sur ${d.stations.length})`;
-    document.getElementById('toggles').innerHTML = [...d.stations].sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(st =>
-      `<button type="button" class="toggle" data-key="${esc(st.key)}" aria-pressed="${isVisible(st)}"><span class="box"></span>${esc(st.name)}</button>`).join('');
+    // Listes de choix (ordre alphabétique) : toutes les stations qui mesurent le vent, puis la houle.
+    const lists = { wind: d.stations.filter(hasWind), wave: d.stations.filter(hasWave) };
+    for (const kind of ['wind', 'wave']) {
+      const pk = document.getElementById('picker-' + kind), all = lists[kind];
+      pk.hidden = !all.length;
+      pk.querySelector('summary').textContent = `Choisir les stations (${all.filter(st => isVisible(st, kind)).length} sur ${all.length})`;
+      pk.querySelector('.toggles').innerHTML = [...all].sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(st =>
+        `<button type="button" class="toggle" data-key="${esc(st.key)}" aria-pressed="${isVisible(st, kind)}"><span class="box"></span>${esc(st.name)}</button>`).join('');
+    }
 
-    const shown = stations.filter(isVisible);
+    const shown = stations.filter(st => hasWind(st) && isVisible(st, 'wind'));
     const u = UNITS[state.unit].short;
     document.getElementById('grid').innerHTML = shown.length ? `<table class="readings">
-      <thead><tr><th class="st">Station</th><th>Vent ${u}</th><th>Rafales</th><th class="opt">Wingfoil</th><th>Direction</th><th>Côte</th><th>Air</th><th class="opt">Relevé</th></tr></thead>
+      <thead><tr><th class="st">Station</th><th>Vent ${u}</th><th>Rafales</th><th class="opt">Wingfoil</th><th>Direction</th><th>Côte</th><th class="opt">Air</th><th class="opt">Relevé</th></tr></thead>
       <tbody>${shown.map(row).join('')}</tbody></table>`
-      : `<p class="sub" style="padding:12px 16px;margin:0">${stations.length ? 'Aucune station choisie. Cochez-en une ou plusieurs ci-dessus.' : 'Aucune station disponible. Vérifiez la configuration des sources.'}</p>`;
+      : `<p class="sub" style="padding:12px 16px;margin:0">${lists.wind.length ? 'Aucune station de vent choisie. Ouvrez « Choisir les stations » ci-dessus.' : 'Aucune station de vent disponible.'}</p>`;
 
     // Même échelle pour toutes les stations, pour pouvoir les comparer d'un coup d'œil.
-    const maxOf = q => Math.max(0, ...shown.flatMap(st => (st.series?.[q] || []).map(p => p[1])));
-    const scale = { wind: Math.max(maxOf('wind_speed'), maxOf('wind_gust'), 1), wave: Math.max(maxOf('wave_height'), maxOf('wave_h10')) || null };
+    const waveSt = stations.filter(st => hasWave(st) && isVisible(st, 'wave'));
+    const maxOf = (list, q) => Math.max(0, ...list.flatMap(st => (st.series?.[q] || []).map(p => p[1])));
+    const scale = { wind: Math.max(maxOf(shown, 'wind_speed'), maxOf(shown, 'wind_gust'), 1), wave: Math.max(maxOf(waveSt, 'wave_height'), maxOf(waveSt, 'wave_h10')) || null };
     document.getElementById('history').innerHTML = shown.map(st =>
       `<article class="detail" id="hist-wind-${esc(st.key.replace(':', '-'))}"><h3 class="history-title">${esc(st.name)}</h3>${chart(st, scale)}</article>`).join('');
 
     // Houle : seulement les stations qui la mesurent, triées par hauteur (ou par nom).
-    const waveSt = shown.filter(st => val(st, 'wave_height') != null || val(st, 'wave_period') != null);
     if (state.sort !== 'name') waveSt.sort((a, b) => (val(b, 'wave_height') ?? -1) - (val(a, 'wave_height') ?? -1));
     document.getElementById('waves').innerHTML = waveSt.length ? `<table class="readings">
       <thead><tr><th class="st">Station</th><th class="nocase" title="Hauteur significative">Hs</th><th class="nocase" title="Hauteur moyenne des 10 % plus hautes vagues">H10%</th><th class="opt">Mer</th><th>Période</th><th>Direction</th><th>Eau</th><th class="opt">Relevé</th></tr></thead>
       <tbody>${waveSt.map(waveRow).join('')}</tbody></table>`
-      : '<p class="sub" style="padding:12px 16px;margin:0">Aucune des stations choisies ne mesure la houle.</p>';
+      : `<p class="sub" style="padding:12px 16px;margin:0">${lists.wave.length ? 'Aucune station de houle choisie. Ouvrez « Choisir les stations » ci-dessus.' : 'Aucune station de houle disponible.'}</p>`;
     document.getElementById('history-waves').innerHTML = waveSt.map(st =>
       `<article class="detail" id="hist-wave-${esc(st.key.replace(':', '-'))}"><h3 class="history-title">${esc(st.name)}</h3>${waveChart(st, scale)}</article>`).join('');
     document.getElementById('wave-section').hidden = !waveSt.length;
+    document.getElementById('history').parentElement.hidden = !shown.length;
 
     document.getElementById('scale').innerHTML = '<span class="label" style="color:var(--muted);padding:0">Repères wingfoil</span>' +
       BANDS.map((b, i) => `<span style="background:${b.color}">${b.name} ${i === 0 ? '< 8' : b.max === Infinity ? '> 32' : (BANDS[i - 1].max) + '–' + b.max} kn</span>`).join('');
@@ -556,16 +585,17 @@ footer a { color: var(--accent); }
     e.preventDefault();
     document.getElementById((c.dataset.kind === 'wave' ? 'hist-wave-' : 'hist-wind-') + c.dataset.key.replace(':', '-'))?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   });
-  document.getElementById('toggles').addEventListener('click', e => {
+  for (const pk of document.querySelectorAll('.picker[data-kind]')) pk.addEventListener('click', e => {
+    const kind = pk.dataset.kind;
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act) { state.vis[kind] = act === 'all' ? null : new Set(); saveVisible(kind); render(); return; }
     const t = e.target.closest('.toggle'); if (!t) return;
-    const all = state.data.stations.map(s => s.key);
-    const vis = state.visible ?? new Set(all);
+    const all = state.data.stations.filter(kind === 'wind' ? hasWind : hasWave).map(s => s.key);
+    const vis = state.vis[kind] ?? new Set(all);
     vis.has(t.dataset.key) ? vis.delete(t.dataset.key) : vis.add(t.dataset.key);
-    state.visible = all.every(k => vis.has(k)) ? null : vis;
-    saveVisible(); render();
+    state.vis[kind] = all.every(k => vis.has(k)) ? null : vis;
+    saveVisible(kind); render();
   });
-  document.getElementById('pick-all').addEventListener('click', () => { state.visible = null; saveVisible(); render(); });
-  document.getElementById('pick-none').addEventListener('click', () => { state.visible = new Set(); saveVisible(); render(); });
   document.getElementById('refresh').addEventListener('click', load);
   // ---------- Infobulle sur les graphiques (souris, doigt ou stylet) ----------
   const tip = document.getElementById('tip');
