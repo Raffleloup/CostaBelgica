@@ -51,7 +51,8 @@ http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/debug/')) {
       const src = sources.find(s => s.id === url.pathname.split('/')[3]);
       if (!src?.debug) return send(res, 404, { error: 'Source inconnue' });
-      return send(res, 200, await src.debug());
+      const out = await src.debug();
+      return send(res, 200, out, typeof out === 'string' ? 'text/plain; charset=utf-8' : undefined);
     }
     if (url.pathname === '/' || url.pathname === '/index.html') {
       // index.html est un fragment (même fichier que l'aperçu publié) : on l'enveloppe ici.

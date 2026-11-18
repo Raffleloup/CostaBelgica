@@ -28,6 +28,16 @@ const RULES = [
   [/water level|tide|waterhoogte/i,           'water_level'],
 ];
 
+// Premier texte disponible dans l'ordre des langues demandé.
+function pick(list, cultures) {
+  if (!Array.isArray(list)) return list ?? '';
+  for (const c of cultures) {
+    const hit = list.find(m => m.Culture?.toLowerCase().startsWith(c));
+    if (hit?.Message) return hit.Message;
+  }
+  return list[0]?.Message ?? '';
+}
+
 function msg(list, culture = 'en') {
   if (!Array.isArray(list)) return list ?? '';
   const hit = list.find(m => m.Culture?.toLowerCase().startsWith(culture))
@@ -91,7 +101,7 @@ export default function createMeetnetSource(env) {
     }
     const locations = new Map();
     for (const l of c.Locations ?? []) {
-      locations.set(l.ID, { id: l.ID, name: msg(l.Name, 'nl') || msg(l.Name, 'en') || l.ID, ...parsePoint(l.PositionWKT) });
+      locations.set(l.ID, { id: l.ID, name: pick(l.Name, ['fr', 'en', 'nl']) || l.ID, ...parsePoint(l.PositionWKT) });
     }
     // Un seul identifiant (couple station/paramètre) par grandeur et par station.
     const lp = new Map(); // lpId -> { stationId, quantity, unit }
@@ -105,7 +115,10 @@ export default function createMeetnetSource(env) {
       lp.set(a.ID, { stationId: a.Location, quantity: p.quantity, unit: p.unit, paramName: p.name });
     }
     const stationIds = new Set([...lp.values()].map(v => v.stationId));
-    catalog = { locations, lp, stations: [...stationIds].map(id => locations.get(id)) };
+    const byLoc = new Map();
+    for (const a of c.AvailableData ?? []) byLoc.set(a.Location, [...(byLoc.get(a.Location) ?? []), a.Parameter]);
+    const raw = { params, byLoc };
+    catalog = { raw, locations, lp, stations: [...stationIds].map(id => locations.get(id)) };
     catalogAt = Date.now();
     return catalog;
   }
@@ -159,7 +172,12 @@ export default function createMeetnetSource(env) {
     // Utile pour vérifier le classement des paramètres (GET /api/debug/meetnet).
     async debug() {
       const cat = await loadCatalog();
-      return [...cat.lp.entries()].map(([id, m]) => ({ id, ...m, station: cat.locations.get(m.stationId)?.name }));
+      // Texte compact : tous les paramètres du catalogue, puis chaque station avec ses codes de paramètres.
+      const lines = ['# Paramètres (code | nom | unité | grandeur reconnue)'];
+      for (const [id, p] of cat.raw.params) lines.push(`${id} | ${p.name} | ${p.unit ?? ''} | ${p.quantity ?? '-'}`);
+      lines.push('', '# Stations (code | nom | paramètres disponibles)');
+      for (const [id, codes] of cat.raw.byLoc) lines.push(`${id} | ${cat.locations.get(id)?.name ?? '?'} | ${codes.join(' ')}`);
+      return lines.join('\n');
     },
   };
 }
