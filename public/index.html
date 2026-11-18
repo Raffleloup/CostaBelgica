@@ -1,0 +1,631 @@
+<title>Météo mer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout : bandeau d'instruments en haut, grille de stations, puis panneau de détail de la station choisie. */
+:root {
+  --bg: #e9eff2;
+  --surface: #f8fbfc;
+  --ink: #0f2430;
+  --muted: #5a7180;
+  --line: #cfdbe1;
+  --accent: #0b6e8a;
+  --accent-soft: #d3e9ef;
+  --calm: #9aaab3;
+  --light: #4a9fd0;
+  --good: #149a74;
+  --strong: #d58a12;
+  --vstrong: #d4502a;
+  --extreme: #a3266b;
+  --warn-bg: #fbecd9;
+  --warn-ink: #7a4a05;
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a161d; --surface: #11222c; --ink: #e2edf2; --muted: #8aa3b0; --line: #213844;
+    --accent: #47b6d4; --accent-soft: #163845; --calm: #5f717b; --light: #5aaee0; --good: #2fc196;
+    --strong: #eaa43a; --vstrong: #f06c47; --extreme: #e05aa1; --warn-bg: #3a2a12; --warn-ink: #f2c98a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a161d; --surface: #11222c; --ink: #e2edf2; --muted: #8aa3b0; --line: #213844;
+  --accent: #47b6d4; --accent-soft: #163845; --calm: #5f717b; --light: #5aaee0; --good: #2fc196;
+  --strong: #eaa43a; --vstrong: #f06c47; --extreme: #e05aa1; --warn-bg: #3a2a12; --warn-ink: #f2c98a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+}
+.wrap {
+  max-width: 1180px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+  display: grid; gap: 20px;
+}
+.num { font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 2.1rem; letter-spacing: .01em; margin: 0; line-height: 1; }
+.sub { color: var(--muted); font-size: .9rem; margin-top: 6px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 600 .85rem var(--font-body); padding: 7px 11px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 .85rem var(--font-body); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+button:focus-visible, .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+
+.notice { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 10px 14px; font-size: .9rem; }
+.sources { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--calm); }
+.chip.ok .dot { background: var(--good); }
+.chip.error .dot { background: var(--vstrong); }
+
+.now { display: grid; gap: 10px; }
+.now-head { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 8px 16px; }
+.now-title { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; margin: 0; }
+.picker { min-width: 0; max-width: 100%; }
+.picker summary { cursor: pointer; font: 600 .85rem var(--font-body); color: var(--accent); padding: 4px 0; list-style-position: inside; }
+.picker[open] { flex-basis: 100%; }
+.picker-body { display: grid; gap: 8px; padding: 10px 0 4px; }
+.table-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table.readings { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.readings th { font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; text-align: left; padding: 8px 9px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.readings td { font-size: .85rem; padding: 7px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+.readings tr:last-child td { border-bottom: 0; }
+.readings tbody tr { cursor: pointer; }
+.readings tbody tr:hover td { background: var(--accent-soft); }
+.readings .st { position: sticky; left: 0; background: var(--surface); box-shadow: inset 4px 0 0 var(--band, var(--calm)); font-weight: 600; padding-left: 12px; }
+.readings .st a { color: inherit; text-decoration: none; }
+.readings .st a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.readings .st small { display: block; font-weight: 400; font-size: .72rem; color: var(--muted); }
+.readings .w { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; line-height: 1; }
+.readings .g { font-family: var(--font-display); font-size: 1rem; font-weight: 600; }
+.readings .m { font-family: var(--font-display); font-size: .95rem; font-weight: 500; }
+.readings .dirc { display: inline-flex; align-items: center; gap: 6px; }
+.readings .dirc svg { width: 18px; height: 18px; }
+.readings .age { white-space: nowrap; }
+.readings th.nocase { text-transform: none; letter-spacing: .02em; font-size: .78rem; }
+@media (max-width: 640px) {
+  .readings .opt { display: none; }
+  .readings th, .readings td { padding-left: 4px; padding-right: 4px; font-size: .78rem; }
+  .readings td .sub { font-size: .7rem; }
+  .readings th { font-size: .6rem; letter-spacing: .05em; }
+  .readings .st { padding-left: 10px; white-space: normal; min-width: 6em; }
+  .readings .w { font-size: 1.15rem; }
+  .readings .pill { font-size: .68rem; padding: 2px 6px; }
+  .readings .dirc svg, .readings .st small { display: none; }
+}
+.picker-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.linkbtn { border: 0; background: none; color: var(--accent); font: 600 .82rem var(--font-body); cursor: pointer; padding: 2px 0; }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.toggle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font: 500 .85rem var(--font-body); padding: 5px 11px 5px 9px; border-radius: 999px; cursor: pointer; }
+.toggle .box { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--muted); display: grid; place-items: center; }
+.toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); background: var(--accent-soft); }
+.toggle[aria-pressed="true"] .box { background: var(--accent); border-color: var(--accent); }
+.toggle[aria-pressed="true"] .box::after { content: ""; width: 7px; height: 4px; border: 2px solid var(--surface); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
+.toggle:focus-visible, .linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.history { display: grid; gap: 14px; }
+.now-sub { font: 600 .75rem var(--font-body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 6px 0 -2px; }
+.section-title { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; margin: 8px 0 0; }
+.history-title { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; margin: 4px 0 0; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 12px;
+  display: grid; gap: 10px; cursor: pointer; text-align: left; color: inherit; font: inherit;
+  border-top: 4px solid var(--band, var(--calm));
+}
+.card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.card-name { font-weight: 600; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.card-src { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.wind { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
+.speed { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.speed .v { font-family: var(--font-display); font-size: 3rem; font-weight: 700; line-height: .9; font-variant-numeric: tabular-nums; }
+.speed .u { color: var(--muted); font-size: .85rem; }
+.gust { font-size: .9rem; color: var(--muted); }
+.gust b { color: var(--ink); font-family: var(--font-display); font-size: 1.15rem; }
+.compass { width: 74px; height: 74px; }
+.compass text { font: 600 9px var(--font-body); fill: var(--muted); }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--ink); }
+.pill.band { background: var(--band); color: var(--surface); }
+.pill.off { background: var(--warn-bg); color: var(--warn-ink); }
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.facts .val { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.spark { width: 100%; height: 44px; display: block; }
+.age { font-size: .75rem; color: var(--muted); }
+
+.detail { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.detail h2 { font-family: var(--font-display); font-size: 1.5rem; margin: 0; font-weight: 600; text-wrap: balance; }
+.chart-box { overflow-x: auto; }
+.chart { width: 100%; height: auto; display: block; }
+.chart { touch-action: pan-y; cursor: crosshair; }
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: .8rem; line-height: 1.35; box-shadow: 0 6px 20px rgb(0 0 0 / .18); min-width: 150px; }
+.tip .t { color: var(--muted); font-size: .72rem; margin-bottom: 3px; }
+.tip .r { display: flex; justify-content: space-between; gap: 14px; }
+.tip b { font-family: var(--font-display); font-size: .95rem; font-variant-numeric: tabular-nums; }
+.chart text { font: 500 11px var(--font-body); fill: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .8rem; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.scale { display: flex; flex-wrap: wrap; gap: 6px; font-size: .75rem; color: var(--muted); align-items: center; }
+.scale span { padding: 2px 8px; border-radius: 6px; color: var(--surface); font-weight: 600; }
+footer { color: var(--muted); font-size: .8rem; display: grid; gap: 4px; }
+footer a { color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .compass .arrow { transition: transform .6s ease; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Météo mer</h1>
+      <div class="sub" id="updated">Chargement des relevés…</div>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Unité de vent" id="units">
+        <button type="button" id="u-kn" data-u="kn">nœuds</button>
+        <button type="button" id="u-ms" data-u="ms">m/s</button>
+        <button type="button" id="u-kmh" data-u="kmh">km/h</button>
+        <button type="button" id="u-bft" data-u="bft">Bft</button>
+      </div>
+      <div class="seg" role="group" aria-label="Durée de l'historique" id="range">
+        <button type="button" id="h-3" data-h="3">3 h</button>
+        <button type="button" id="h-6" data-h="6">6 h</button>
+        <button type="button" id="h-12" data-h="12">12 h</button>
+        <button type="button" id="h-24" data-h="24">24 h</button>
+        <button type="button" id="h-48" data-h="48">48 h</button>
+        <button type="button" id="h-72" data-h="72">72 h</button>
+        <button type="button" id="h-168" data-h="168">7 j</button>
+      </div>
+      <div class="seg" role="group" aria-label="Tri des stations" id="sort">
+        <button type="button" id="s-wind" data-s="wind">Plus venté</button>
+        <button type="button" id="s-name" data-s="name">A → Z</button>
+      </div>
+      <button type="button" class="btn" id="refresh">Actualiser</button>
+    </div>
+  </header>
+
+  <section class="now" aria-label="Derniers relevés">
+    <div class="now-head">
+      <h2 class="now-title">Derniers relevés</h2>
+      <details class="picker" id="picker">
+        <summary id="picker-summary">Choisir les stations</summary>
+        <div class="picker-body">
+          <div class="picker-head">
+            <button type="button" class="linkbtn" id="pick-all">Toutes</button>
+            <button type="button" class="linkbtn" id="pick-none">Aucune</button>
+          </div>
+          <div class="toggles" id="toggles"></div>
+        </div>
+      </details>
+    </div>
+    <h3 class="now-sub">Vent</h3>
+    <div class="table-box" id="grid"></div>
+    <h3 class="now-sub">Houle</h3>
+    <div class="table-box" id="waves"></div>
+  </section>
+  <section class="history" aria-labelledby="h-wind"><h2 class="section-title" id="h-wind">Historique du vent</h2><div class="history" id="history"></div></section>
+  <section class="history" aria-labelledby="h-wave" id="wave-section"><h2 class="section-title" id="h-wave">Historique de la houle</h2><div class="history" id="history-waves"></div></section>
+
+  <footer>
+    <div class="notice" id="demo-notice" hidden>Aperçu avec des données de démonstration. Une fois le serveur lancé avec un compte Meetnet, les vrais relevés remplacent ces valeurs.</div>
+    <div class="sources" id="sources"></div>
+    <div class="scale" id="scale"></div>
+    <div>Direction : d'où vient le vent. Onshore, side-shore et offshore sont calculés pour la côte belge, orientée vers le nord-ouest. Toujours vérifier sur place avant d'aller à l'eau.</div>
+    <div id="attrib"></div>
+  </footer>
+</div>
+
+<div class="tip" id="tip" hidden></div>
+<script>
+(() => {
+  // ---------- Préférences (par navigateur) ----------
+  const store = {
+    get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+  const state = { unit: store.get('mm-unit', 'kn'), sort: store.get('mm-sort', 'wind'), visible: loadVisible(), hours: [3, 6, 12, 24, 48, 72, 168].includes(+store.get('mm-hours', 24)) ? +store.get('mm-hours', 24) : 24, data: null, demo: false };
+
+  // Stations choisies : liste de clés mémorisée ; null = toutes.
+  function loadVisible() {
+    try { const v = JSON.parse(store.get('mm-visible', 'null')); return Array.isArray(v) ? new Set(v) : null; } catch { return null; }
+  }
+  function saveVisible() { store.set('mm-visible', JSON.stringify(state.visible ? [...state.visible] : null)); }
+  const isVisible = st => !state.visible || state.visible.has(st.key);
+
+  // ---------- Unités et échelles ----------
+  const UNITS = {
+    kn:  { label: 'nœuds', short: 'kn',  f: v => v * 1.943844, step: 5 },
+    ms:  { label: 'm/s',   short: 'm/s', f: v => v,            step: 2 },
+    kmh: { label: 'km/h',  short: 'km/h',f: v => v * 3.6,      step: 10 },
+    bft: { label: 'Beaufort', short: 'Bft', f: v => beaufort(v), step: 1 },
+  };
+  const BFT = [0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7];
+  function beaufort(ms) { let b = 0; while (b < BFT.length && ms >= BFT[b]) b++; return b; }
+  const fmtWind = ms => ms == null ? '–' : state.unit === 'bft' ? String(beaufort(ms)) : UNITS[state.unit].f(ms).toFixed(state.unit === 'ms' ? 1 : 0);
+
+  // Classes de vent pour le wingfoil (en nœuds).
+  const BANDS = [
+    { max: 8,  name: 'Pas de vent', color: 'var(--calm)' },
+    { max: 12, name: 'Léger',       color: 'var(--light)' },
+    { max: 18, name: 'Idéal',       color: 'var(--good)' },
+    { max: 25, name: 'Soutenu',     color: 'var(--strong)' },
+    { max: 32, name: 'Fort',        color: 'var(--vstrong)' },
+    { max: Infinity, name: 'Très fort', color: 'var(--extreme)' },
+  ];
+  const band = ms => BANDS.find(b => ms * 1.943844 < b.max) ?? BANDS.at(-1);
+
+  const CARD = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
+  const cardinal = d => CARD[Math.round(((d % 360) + 360) % 360 / 22.5) % 16];
+  // Côte belge : la mer est au nord-ouest (normale ~315°).
+  function exposure(dir) {
+    const diff = Math.abs(((dir - 315 + 540) % 360) - 180);
+    if (diff <= 45) return { name: 'Onshore', cls: '' };
+    if (diff <= 105) return { name: 'Side-shore', cls: '' };
+    return { name: 'Offshore', cls: 'off' };
+  }
+
+  const tz = 'Europe/Brussels';
+  const fmtTime = new Intl.DateTimeFormat('fr-BE', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+  const fmtDay = new Intl.DateTimeFormat('fr-BE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz });
+  function ago(iso) {
+    const min = Math.round((Date.now() - new Date(iso)) / 60000);
+    if (min < 1) return "à l'instant";
+    if (min < 60) return `il y a ${min} min`;
+    const h = Math.floor(min / 60);
+    return h < 48 ? `il y a ${h} h ${String(min % 60).padStart(2, '0')}` : `le ${fmtDay.format(new Date(iso))}`;
+  }
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // ---------- Données de démonstration (si aucun serveur ne répond) ----------
+  function demoData(hours) {
+    const STATIONS = [
+      { id: 'NPT', name: 'Nieuwpoort (démo)', exposure: 1.0 }, { id: 'OST', name: 'Oostende (démo)', exposure: 0.95 },
+      { id: 'WDL', name: 'Wandelaar (démo)', exposure: 1.2 }, { id: 'ZBR', name: 'Zeebrugge (démo)', exposure: 0.9 },
+      { id: 'WHI', name: 'Westhinder (démo)', exposure: 1.35 },
+    ];
+    const noise = s => { const x = Math.sin(s * 12.9898) * 43758.5453; return x - Math.floor(x); };
+    function sample(st, t) {
+      const h = t / 3600e3, k = st.id.charCodeAt(0) + st.id.charCodeAt(2);
+      const base = 7 + 3.5 * Math.sin(h / 7 + 0.3) + 1.5 * Math.sin(h / 2.3 + k);
+      const speed = Math.max(0.5, base * st.exposure + (noise(Math.floor(h * 6) + k) - 0.5) * 1.6);
+      const wave = Math.max(0.15, 0.08 * speed * st.exposure + 0.15 * Math.sin(h / 5));
+      return {
+        wind_speed: speed, wind_gust: speed * (1.25 + 0.2 * noise(Math.floor(h * 6) + k + 7)),
+        wind_dir: (250 + 50 * Math.sin(h / 11) + 10 * noise(Math.floor(h * 6) + k + 3) + 360) % 360,
+        wave_height: wave, wave_h10: wave * 1.27, wave_period: 3.5 + wave * 2.2, wave_dir: (290 + 25 * Math.sin(h / 13) + 360) % 360,
+        water_temp: 10.8 + 0.3 * Math.sin(h / 12), air_temp: 9 + 2 * Math.sin((h - 9) / 3.8),
+      };
+    }
+    const now = Math.floor(Date.now() / 600e3) * 600e3;
+    return {
+      generatedAt: new Date().toISOString(), hours,
+      sources: [{ id: 'demo', name: 'Démonstration', status: 'ok', attribution: 'Données synthétiques, pas des mesures réelles' },
+                { id: 'meetnet', name: 'Meetnet Vlaamse Banken', status: 'unconfigured', url: 'https://meetnetvlaamsebanken.be' }],
+      stations: STATIONS.map(st => {
+        const latest = {}, series = {};
+        for (const [q, v] of Object.entries(sample(st, now))) latest[q] = { value: v, time: new Date(now).toISOString() };
+        for (const q of ['wind_speed', 'wind_gust', 'wind_dir', 'wave_height', 'wave_h10']) {
+          series[q] = [];
+          for (let t = now - hours * 3600e3; t <= now; t += 600e3) series[q].push([new Date(t).toISOString(), sample(st, t)[q]]);
+        }
+        return { key: 'demo:' + st.id, source: 'demo', id: st.id, name: st.name, latest, series };
+      }),
+    };
+  }
+
+  async function load() {
+    document.getElementById('refresh').disabled = true;
+    try {
+      const res = await fetch(`api/overview?hours=${state.hours}`, { headers: { Accept: 'application/json' } });
+      if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) throw new Error('no api');
+      state.data = await res.json();
+      state.demo = state.data.sources.every(s => s.id === 'demo' || s.status !== 'ok');
+    } catch {
+      state.data = demoData(state.hours);
+      state.demo = true;
+    }
+    document.getElementById('refresh').disabled = false;
+    render();
+  }
+
+  // ---------- Rendu ----------
+  const val = (st, q) => st.latest[q]?.value;
+
+  // État de la mer (échelle Douglas) d'après la hauteur significative.
+  const SEA = [
+    { max: 0.1, name: 'Calme', color: 'var(--calm)' },
+    { max: 0.5, name: 'Belle', color: 'var(--light)' },
+    { max: 1.25, name: 'Peu agitée', color: 'var(--good)' },
+    { max: 2.5, name: 'Agitée', color: 'var(--strong)' },
+    { max: 4, name: 'Forte', color: 'var(--vstrong)' },
+    { max: Infinity, name: 'Très forte', color: 'var(--extreme)' },
+  ];
+  const seaState = h => SEA.find(x => h < x.max) ?? SEA.at(-1);
+
+  function waveRow(st) {
+    const wh = val(st, 'wave_height'), wh10 = val(st, 'wave_h10'), wp = val(st, 'wave_period'), wd = val(st, 'wave_dir'), wt = val(st, 'water_temp');
+    const sea = wh != null ? seaState(wh) : SEA[0];
+    const src = state.data.sources.find(x => x.id === st.source);
+    const t = st.latest.wave_height?.time ?? st.latest.wave_period?.time;
+    const arrow = wd == null ? '' : `<svg viewBox="-12 -12 24 24" aria-hidden="true"><circle r="11" fill="none" stroke="var(--line)"/><g transform="rotate(${wd + 180})"><path d="M0,-8 L4,2 L1,1 L1,8 L-1,8 L-1,1 L-4,2 Z" fill="var(--ink)"/></g></svg>`;
+    return `<tr data-key="${esc(st.key)}" data-kind="wave" style="--band:${sea.color}">
+      <td class="st"><a href="#hist-wave-${esc(st.key.replace(':', '-'))}">${esc(st.name)}</a><small>${esc(src?.name ?? st.source)}</small></td>
+      <td><span class="w">${wh != null ? wh.toFixed(2) : '–'}</span> <span class="sub">m</span></td>
+      <td><span class="g">${wh10 != null ? wh10.toFixed(2) : '–'}</span> <span class="sub">m</span></td>
+      <td class="opt">${wh != null ? `<span class="pill band">${sea.name}</span>` : "–"}</td>
+      <td><span class="g">${wp != null ? wp.toFixed(1) : '–'}</span> <span class="sub">s</span></td>
+      <td>${wd != null ? `<span class="dirc">${arrow}<span>${cardinal(wd)} <span class="m">${Math.round(wd)}°</span></span></span>` : '–'}</td>
+      <td><span class="m">${wt != null ? wt.toFixed(1) + ' °C' : '–'}</span></td>
+      <td class="age opt">${t ? ago(t) : '–'}</td>
+    </tr>`;
+  }
+
+  function row(st) {
+    const s = val(st, 'wind_speed'), g = val(st, 'wind_gust'), d = val(st, 'wind_dir');
+    const b = s != null ? band(s) : BANDS[0];
+    const ex = d != null ? exposure(d) : null;
+    const wh = val(st, 'wave_height'), wp = val(st, 'wave_period'), wt = val(st, 'water_temp'), at = val(st, 'air_temp');
+    const times = Object.values(st.latest).map(l => l.time).sort();
+    const src = state.data.sources.find(x => x.id === st.source);
+    const anchor = 'hist-wind-' + st.key.replace(':', '-');
+    const arrow = d == null ? '' : `<svg viewBox="-12 -12 24 24" aria-hidden="true"><circle r="11" fill="none" stroke="var(--line)"/><g transform="rotate(${d + 180})"><path d="M0,-8 L4,2 L1,1 L1,8 L-1,8 L-1,1 L-4,2 Z" fill="var(--ink)"/></g></svg>`;
+    return `<tr data-key="${esc(st.key)}" style="--band:${b.color}">
+      <td class="st"><a href="#${esc(anchor)}">${esc(st.name)}</a><small>${esc(src?.name ?? st.source)}</small></td>
+      <td><span class="w">${fmtWind(s)}</span></td>
+      <td><span class="g">${fmtWind(g)}</span></td>
+      <td class="opt">${s != null ? `<span class="pill band">${b.name}</span>` : ''}</td>
+      <td>${d != null ? `<span class="dirc">${arrow}<span>${cardinal(d)} <span class="m">${Math.round(d)}°</span></span></span>` : '–'}</td>
+      <td>${ex ? `<span class="pill ${ex.cls}">${ex.name}</span>` : '–'}</td>
+      <td><span class="m">${at != null ? at.toFixed(1) + ' °C' : '–'}</span></td>
+      <td class="age opt">${times.length ? ago(times.at(-1)) : '–'}</td>
+    </tr>`;
+  }
+
+  // Graduations de l'axe du temps selon la durée affichée.
+  const fmtTickDay = new Intl.DateTimeFormat('fr-BE', { weekday: 'short', hour: '2-digit', timeZone: tz });
+  const tickHours = () => state.hours <= 3 ? 0.5 : state.hours <= 12 ? 1 : state.hours <= 24 ? 3 : state.hours <= 48 ? 6 : state.hours <= 72 ? 12 : 24;
+  const arrowHours = () => state.hours <= 3 ? 0.25 : state.hours <= 6 ? 0.5 : Math.max(1, Math.ceil(state.hours / 24));
+  const fmtDayOnly = new Intl.DateTimeFormat('fr-BE', { weekday: 'short', day: 'numeric', timeZone: tz });
+  const tickLabel = t => state.hours <= 24 ? fmtTime.format(new Date(t)) : state.hours <= 48 ? fmtTickDay.format(new Date(t)) : fmtDayOnly.format(new Date(t));
+  // Décalage de Bruxelles par rapport à UTC (en ms), pour caler les graduations sur l'heure locale.
+  const tzOffset = () => { const n = new Date(); const h = +new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: tz }).format(n); return ((h - n.getUTCHours() + 36) % 24 - 12) * 3600e3; };
+  const firstTick = (t0, tk) => { const o = tzOffset(); return Math.ceil((t0 + o) / tk) * tk - o; };
+  const periodLabel = () => state.hours >= 168 ? '7 derniers jours' : `dernières ${state.hours} h`;
+
+  // Largeur logique des graphiques : plus étroite sur téléphone pour garder des textes lisibles.
+  const chartWidth = () => innerWidth < 640 ? 440 : 820;
+  let lastW = chartWidth();
+  addEventListener('resize', () => { if (state.data && chartWidth() !== lastW) { lastW = chartWidth(); render(); } });
+
+  function niceStep(max) {
+    const raw = max / 5, p = 10 ** Math.floor(Math.log10(raw)), n = raw / p;
+    return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * p;
+  }
+
+  function chart(st, scale = {}) {
+    const conv = v => state.unit === 'bft' ? beaufort(v) : UNITS[state.unit === 'bft' ? 'ms' : state.unit].f(v);
+    const avg = (st.series?.wind_speed || []).map(p => [new Date(p[0]).getTime(), conv(p[1])]);
+    const gust = (st.series?.wind_gust || []).map(p => [new Date(p[0]).getTime(), conv(p[1])]);
+    const dirs = (st.series?.wind_dir || []).map(p => [new Date(p[0]).getTime(), p[1]]);
+    if (avg.length < 2) return '<p class="sub">Pas d’historique de vent pour cette station.</p>';
+
+    const W = chartWidth(), L = 40, R = 12, T = 34, H = 230, B = 26;
+    const t0 = Math.min(...avg.map(p => p[0])), t1 = Math.max(...avg.map(p => p[0]));
+    const ymaxRaw = scale.wind != null ? conv(scale.wind) : Math.max(...avg.map(p => p[1]), ...gust.map(p => p[1]), 1);
+    const step = state.unit === 'bft' ? 1 : niceStep(ymaxRaw * 1.1);
+    const ymax = Math.ceil(ymaxRaw * 1.1 / step) * step;
+    const x = t => L + (t - t0) / (t1 - t0 || 1) * (W - L - R);
+    const y = v => H - B - v / ymax * (H - B - T);
+    const path = pts => pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join('');
+
+    let grid = '';
+    for (let v = 0; v <= ymax + 1e-9; v += step) {
+      grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${+v.toFixed(1)}</text>`;
+    }
+    // Bandes de couleur du wingfoil en arrière-plan (zone idéale)
+    let ideal = '';
+    if (state.unit !== 'bft') {
+      const lo = UNITS[state.unit].f(12 / 1.943844), hi = UNITS[state.unit].f(18 / 1.943844);
+      if (lo < ymax) ideal = `<rect x="${L}" width="${W - L - R}" y="${y(Math.min(hi, ymax))}" height="${y(lo) - y(Math.min(hi, ymax))}" fill="var(--good)" opacity=".14"/>`;
+    }
+    let xt = '';
+    const hour = 3600e3, tk = tickHours() * hour, first = firstTick(t0, tk);
+    for (let t = first; t <= t1; t += tk) {
+      xt += `<line x1="${x(t)}" x2="${x(t)}" y1="${T}" y2="${H - B}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="${x(t)}" y="${H - 8}" text-anchor="${x(t) > W - R - 22 ? 'end' : 'middle'}">${tickLabel(t)}</text>`;
+    }
+    // Flèches de direction toutes les heures, le long du haut
+    let arrows = '';
+    const ah = arrowHours() * hour;
+    for (let t = Math.ceil(t0 / ah) * ah; t <= t1; t += ah) {
+      const d = dirs.reduce((best, p) => Math.abs(p[0] - t) < Math.abs((best?.[0] ?? Infinity) - t) ? p : best, null);
+      if (!d || Math.abs(d[0] - t) > ah / 2) continue;
+      arrows += `<g transform="translate(${x(t)},16) rotate(${d[1] + 180})"><path d="M0,-8 L4,2 L1,1 L1,8 L-1,8 L-1,1 L-4,2 Z" fill="var(--muted)"/></g>`;
+    }
+    const gustArea = gust.length > 1 ? `<path d="${path(gust)} L${x(gust.at(-1)[0])},${y(0)} L${x(gust[0][0])},${y(0)} Z" fill="var(--accent-soft)"/><path d="${path(gust)}" fill="none" stroke="var(--accent)" stroke-opacity=".45" stroke-width="1"/>` : '';
+    const last = avg.at(-1);
+    const windSvg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Vent, ${periodLabel()}" data-kind="wind" data-key="${esc(st.key)}" data-t0="${t0}" data-t1="${t1}" data-l="${L}" data-r="${R}" data-w="${W}">
+      ${grid}${xt}${gustArea}${ideal}
+      <path d="${path(avg)}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>
+      <circle cx="${x(last[0])}" cy="${y(last[1])}" r="4" fill="var(--accent)"/>
+      ${arrows}
+      <line class="cursor" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--ink)" stroke-opacity=".45" visibility="hidden"/>
+    </svg>`;
+
+    return `<div class="legend"><span><i style="background:var(--accent)"></i>Vent moyen</span><span><i style="background:var(--accent-soft)"></i>Rafales</span>${state.unit !== 'bft' ? '<span><i style="background:var(--good);opacity:.35"></i>Zone 12 à 18 nœuds</span>' : ''}<span>Flèches : sens du vent${arrowHours() < 1 ? ' toutes les ' + arrowHours() * 60 + ' min' : arrowHours() > 1 ? ' toutes les ' + arrowHours() + ' h' : ', chaque heure'}</span></div>
+      <div class="label">Vent (${UNITS[state.unit].label}), ${periodLabel()}</div>
+      <div class="chart-box">${windSvg}</div>`;
+  }
+
+  function waveChart(st, scale = {}) {
+    const waves = (st.series?.wave_height || []).map(p => [new Date(p[0]).getTime(), p[1]]);
+    const h10 = (st.series?.wave_h10 || []).map(p => [new Date(p[0]).getTime(), p[1]]);
+    if (waves.length < 2) return '<p class="sub">Pas d’historique de houle pour cette station.</p>';
+    const W = chartWidth(), L = 40, R = 12, B = 26, WH = 150, hour = 3600e3;
+    const t0 = waves[0][0], t1 = waves.at(-1)[0];
+    const x = t => L + (t - t0) / (t1 - t0 || 1) * (W - L - R);
+    const wmax = Math.max(0.5, Math.ceil((scale.wave ?? Math.max(...waves.map(p => p[1]), ...h10.map(p => p[1]))) * 1.15 * 2) / 2);
+    const yw = v => WH - B - v / wmax * (WH - B - 10);
+    const line = pts => pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${yw(p[1]).toFixed(1)}`).join('');
+    const wp = waves.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${yw(p[1]).toFixed(1)}`).join('');
+    let wg = '';
+    for (let v = 0; v <= wmax + 1e-9; v += wmax <= 1 ? 0.25 : 0.5) wg += `<line x1="${L}" x2="${W - R}" y1="${yw(v)}" y2="${yw(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${yw(v) + 4}" text-anchor="end">${v}</text>`;
+    let wx = '';
+    const tk = tickHours() * hour;
+    for (let t = firstTick(t0, tk); t <= t1; t += tk) wx += `<line x1="${x(t)}" x2="${x(t)}" y1="10" y2="${WH - B}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="${x(t)}" y="${WH - 8}" text-anchor="${x(t) > W - R - 22 ? 'end' : 'middle'}">${tickLabel(t)}</text>`;
+    const last = waves.at(-1);
+    const h10Line = h10.length > 1 ? `<path d="${line(h10)}" fill="none" stroke="var(--ink)" stroke-opacity=".7" stroke-width="1.5" stroke-dasharray="5 4"/>` : '';
+    return `<div class="legend"><span><i style="background:var(--light)"></i>Hauteur significative</span>${h10Line ? '<span><i style="background:var(--ink);opacity:.6"></i>10 % plus hautes vagues (pointillés)</span>' : ''}</div><div class="label">Houle (m), ${periodLabel()}</div><div class="chart-box"><svg class="chart" viewBox="0 0 ${W} ${WH}" role="img" aria-label="Houle, ${periodLabel()}" data-kind="wave" data-key="${esc(st.key)}" data-t0="${t0}" data-t1="${t1}" data-l="${L}" data-r="${R}" data-w="${W}">
+      ${wg}${wx}<path d="${wp} L${x(last[0])},${yw(0)} L${x(t0)},${yw(0)} Z" fill="var(--light)" opacity=".18"/>
+      <path d="${wp}" fill="none" stroke="var(--light)" stroke-width="2"/>${h10Line}<circle cx="${x(last[0])}" cy="${yw(last[1])}" r="4" fill="var(--light)"/><line class="cursor" x1="0" x2="0" y1="10" y2="${WH - B}" stroke="var(--ink)" stroke-opacity=".45" visibility="hidden"/></svg></div>`;
+  }
+
+  function render() {
+    const d = state.data;
+    hideTip();
+    document.getElementById('demo-notice').hidden = !state.demo;
+    document.getElementById('updated').textContent = `Mis à jour ${fmtDay.format(new Date(d.generatedAt))} · heure de Bruxelles${state.demo ? ' · données de démonstration' : ''}`;
+    for (const b of document.querySelectorAll('#units button')) b.setAttribute('aria-pressed', b.dataset.u === state.unit);
+    for (const b of document.querySelectorAll('#range button')) b.setAttribute('aria-pressed', +b.dataset.h === state.hours);
+    for (const b of document.querySelectorAll('#sort button')) b.setAttribute('aria-pressed', b.dataset.s === state.sort);
+
+    const STATUS = { ok: 'connectée', error: 'erreur', unconfigured: 'non configurée' };
+    document.getElementById('sources').innerHTML = d.sources.map(s =>
+      `<span class="chip ${s.status}" title="${esc(s.message || '')}"><span class="dot"></span>${esc(s.name)} · ${STATUS[s.status] || s.status}</span>`).join('');
+    document.getElementById('attrib').innerHTML = d.sources.filter(s => s.status === 'ok').map(s =>
+      s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.attribution || s.name)}</a>` : esc(s.attribution || s.name)).join(' · ');
+
+    const stations = [...d.stations].sort((a, b) => state.sort === 'name'
+      ? a.name.localeCompare(b.name, 'fr') : (val(b, 'wind_speed') ?? -1) - (val(a, 'wind_speed') ?? -1));
+    // Sélecteur de stations (ordre alphabétique, indépendant du tri des cartes)
+    document.getElementById('picker-summary').textContent = `Choisir les stations (${d.stations.filter(isVisible).length} sur ${d.stations.length})`;
+    document.getElementById('toggles').innerHTML = [...d.stations].sort((a, b) => a.name.localeCompare(b.name, 'fr')).map(st =>
+      `<button type="button" class="toggle" data-key="${esc(st.key)}" aria-pressed="${isVisible(st)}"><span class="box"></span>${esc(st.name)}</button>`).join('');
+
+    const shown = stations.filter(isVisible);
+    const u = UNITS[state.unit].short;
+    document.getElementById('grid').innerHTML = shown.length ? `<table class="readings">
+      <thead><tr><th class="st">Station</th><th>Vent ${u}</th><th>Rafales</th><th class="opt">Wingfoil</th><th>Direction</th><th>Côte</th><th>Air</th><th class="opt">Relevé</th></tr></thead>
+      <tbody>${shown.map(row).join('')}</tbody></table>`
+      : `<p class="sub" style="padding:12px 16px;margin:0">${stations.length ? 'Aucune station choisie. Cochez-en une ou plusieurs ci-dessus.' : 'Aucune station disponible. Vérifiez la configuration des sources.'}</p>`;
+
+    // Même échelle pour toutes les stations, pour pouvoir les comparer d'un coup d'œil.
+    const maxOf = q => Math.max(0, ...shown.flatMap(st => (st.series?.[q] || []).map(p => p[1])));
+    const scale = { wind: Math.max(maxOf('wind_speed'), maxOf('wind_gust'), 1), wave: Math.max(maxOf('wave_height'), maxOf('wave_h10')) || null };
+    document.getElementById('history').innerHTML = shown.map(st =>
+      `<article class="detail" id="hist-wind-${esc(st.key.replace(':', '-'))}"><h3 class="history-title">${esc(st.name)}</h3>${chart(st, scale)}</article>`).join('');
+
+    // Houle : seulement les stations qui la mesurent, triées par hauteur (ou par nom).
+    const waveSt = shown.filter(st => val(st, 'wave_height') != null || val(st, 'wave_period') != null);
+    if (state.sort !== 'name') waveSt.sort((a, b) => (val(b, 'wave_height') ?? -1) - (val(a, 'wave_height') ?? -1));
+    document.getElementById('waves').innerHTML = waveSt.length ? `<table class="readings">
+      <thead><tr><th class="st">Station</th><th class="nocase" title="Hauteur significative">Hs</th><th class="nocase" title="Hauteur moyenne des 10 % plus hautes vagues">H10%</th><th class="opt">Mer</th><th>Période</th><th>Direction</th><th>Eau</th><th class="opt">Relevé</th></tr></thead>
+      <tbody>${waveSt.map(waveRow).join('')}</tbody></table>`
+      : '<p class="sub" style="padding:12px 16px;margin:0">Aucune des stations choisies ne mesure la houle.</p>';
+    document.getElementById('history-waves').innerHTML = waveSt.map(st =>
+      `<article class="detail" id="hist-wave-${esc(st.key.replace(':', '-'))}"><h3 class="history-title">${esc(st.name)}</h3>${waveChart(st, scale)}</article>`).join('');
+    document.getElementById('wave-section').hidden = !waveSt.length;
+
+    document.getElementById('scale').innerHTML = '<span class="label" style="color:var(--muted);padding:0">Repères wingfoil</span>' +
+      BANDS.map((b, i) => `<span style="background:${b.color}">${b.name} ${i === 0 ? '< 8' : b.max === Infinity ? '> 32' : (BANDS[i - 1].max) + '–' + b.max} kn</span>`).join('');
+  }
+
+  // ---------- Interactions ----------
+  document.getElementById('units').addEventListener('click', e => {
+    const u = e.target.closest('button')?.dataset.u; if (!u) return;
+    state.unit = u; store.set('mm-unit', u); render();
+  });
+  document.getElementById('range').addEventListener('click', e => {
+    const h = +e.target.closest('button')?.dataset.h; if (!h || h === state.hours) return;
+    state.hours = h; store.set('mm-hours', h);
+    for (const b of document.querySelectorAll('#range button')) b.setAttribute('aria-pressed', +b.dataset.h === h);
+    load();
+  });
+  document.getElementById('sort').addEventListener('click', e => {
+    const s = e.target.closest('button')?.dataset.s; if (!s) return;
+    state.sort = s; store.set('mm-sort', s); render();
+  });
+  document.querySelector('.now').addEventListener('click', e => {
+    const c = e.target.closest('tr[data-key]'); if (!c) return;
+    e.preventDefault();
+    document.getElementById((c.dataset.kind === 'wave' ? 'hist-wave-' : 'hist-wind-') + c.dataset.key.replace(':', '-'))?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  });
+  document.getElementById('toggles').addEventListener('click', e => {
+    const t = e.target.closest('.toggle'); if (!t) return;
+    const all = state.data.stations.map(s => s.key);
+    const vis = state.visible ?? new Set(all);
+    vis.has(t.dataset.key) ? vis.delete(t.dataset.key) : vis.add(t.dataset.key);
+    state.visible = all.every(k => vis.has(k)) ? null : vis;
+    saveVisible(); render();
+  });
+  document.getElementById('pick-all').addEventListener('click', () => { state.visible = null; saveVisible(); render(); });
+  document.getElementById('pick-none').addEventListener('click', () => { state.visible = new Set(); saveVisible(); render(); });
+  document.getElementById('refresh').addEventListener('click', load);
+  // ---------- Infobulle sur les graphiques (souris, doigt ou stylet) ----------
+  const tip = document.getElementById('tip');
+  function nearest(series, t) {
+    if (!series?.length) return null;
+    let best = null, bd = Infinity;
+    for (const p of series) { const d = Math.abs(new Date(p[0]).getTime() - t); if (d < bd) { bd = d; best = p; } }
+    return best && bd < 45 * 60e3 ? best : null;
+  }
+  function hideTip() {
+    tip.hidden = true;
+    for (const c of document.querySelectorAll('.chart .cursor')) c.setAttribute('visibility', 'hidden');
+  }
+  function showTip(svg, clientX, clientY) {
+    const st = state.data?.stations.find(s => s.key === svg.dataset.key); if (!st) return;
+    const { t0, t1, l, r, w } = Object.fromEntries(Object.entries(svg.dataset).map(([k, v]) => [k, +v]));
+    const rect = svg.getBoundingClientRect();
+    const vx = Math.min(w - r, Math.max(l, (clientX - rect.left) / rect.width * w));
+    const t = t0 + (vx - l) / (w - l - r) * (t1 - t0);
+    const rows = [];
+    let at = null;
+    if (svg.dataset.kind === 'wind') {
+      const a = nearest(st.series.wind_speed, t), g = nearest(st.series.wind_gust, t), d = nearest(st.series.wind_dir, t);
+      at = a ?? g; const u = UNITS[state.unit].short;
+      if (a) rows.push(['Vent moyen', `${fmtWind(a[1])} ${u}`]);
+      if (g) rows.push(['Rafales', `${fmtWind(g[1])} ${u}`]);
+      if (d) rows.push(['Direction', `${cardinal(d[1])} ${Math.round(d[1])}°`]);
+      if (a) rows.push(['Wingfoil', band(a[1]).name]);
+    } else {
+      const h = nearest(st.series.wave_height, t), h10 = nearest(st.series.wave_h10, t);
+      at = h ?? h10;
+      if (h) rows.push(['Hs', `${h[1].toFixed(2)} m`]);
+      if (h10) rows.push(['H10%', `${h10[1].toFixed(2)} m`]);
+      if (h) rows.push(['Mer', seaState(h[1]).name]);
+    }
+    if (!at) { hideTip(); return; }
+    const ta = new Date(at[0]).getTime();
+    const cx = l + (ta - t0) / (t1 - t0 || 1) * (w - l - r);
+    for (const c of document.querySelectorAll('.chart .cursor')) c.setAttribute('visibility', 'hidden');
+    const cur = svg.querySelector('.cursor'); cur.setAttribute('x1', cx); cur.setAttribute('x2', cx); cur.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<div class="t">${esc(st.name)} · ${fmtDay.format(new Date(ta))}</div>` + rows.map(([k, v]) => `<div class="r"><span>${k}</span><b>${esc(v)}</b></div>`).join('');
+    tip.hidden = false;
+    const px = rect.left + cx / w * rect.width;
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = px + 14; if (left + tw > innerWidth - 8) left = px - tw - 14; if (left < 8) left = 8;
+    let top = clientY - th - 16; if (top < 8) top = clientY + 20;
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+  }
+  document.addEventListener('pointermove', e => {
+    const svg = e.target.closest?.('svg.chart');
+    if (svg) showTip(svg, e.clientX, e.clientY); else if (e.pointerType === 'mouse') hideTip();
+  });
+  document.addEventListener('pointerdown', e => {
+    const svg = e.target.closest?.('svg.chart');
+    if (svg) showTip(svg, e.clientX, e.clientY); else hideTip();
+  });
+  document.addEventListener('pointercancel', hideTip);
+  addEventListener('scroll', () => { if (!tip.hidden) hideTip(); }, { passive: true });
+
+  setInterval(load, 5 * 60e3);
+  load();
+})();
+</script>

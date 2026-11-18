@@ -1,0 +1,9 @@
+{
+  "name": "costabelgica",
+  "version": "0.1.0",
+  "description": "Tableau de bord vent, vagues et mer (Meetnet Vlaamse Banken et autres sources)",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": { "start": "node server.js" }
+}
