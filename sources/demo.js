@@ -42,7 +42,8 @@ export default function createDemoSource(env) {
     isConfigured: () => env.DEMO !== '0',
 
     async listStations() {
-      return STATIONS.map(({ id, name, lat, lon }) => ({ id, name, lat, lon }));
+      const Q = ['wind_speed', 'wind_gust', 'wind_dir', 'air_temp', 'wave_height', 'wave_h10', 'wave_period', 'wave_dir', 'water_temp'];
+      return STATIONS.map(({ id, name, lat, lon, ...st }) => ({ id, name, lat, lon, measures: Q.filter(q => keeps(st, q)) }));
     },
 
     async latest() {

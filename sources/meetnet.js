@@ -123,7 +123,8 @@ export default function createMeetnetSource(env) {
     const byLoc = new Map();
     for (const a of c.AvailableData ?? []) byLoc.set(a.Location, [...(byLoc.get(a.Location) ?? []), a.Parameter]);
     const raw = { params, byLoc };
-    catalog = { raw, locations, lp, stations: [...stationIds].map(id => locations.get(id)) };
+    const measures = id => [...new Set([...lp.values()].filter(v => v.stationId === id).map(v => v.quantity))];
+    catalog = { raw, locations, lp, stations: [...stationIds].map(id => ({ ...locations.get(id), measures: measures(id) })) };
     catalogAt = Date.now();
     return catalog;
   }

@@ -254,8 +254,9 @@ footer a { color: var(--accent); }
   }
   function saveVisible(kind) { store.set('mm-visible-' + kind, JSON.stringify(state.vis[kind] ? [...state.vis[kind]] : null)); }
   const isVisible = (st, kind) => !state.vis[kind] || state.vis[kind].has(st.key);
-  const hasWind = st => ['wind_speed', 'wind_gust', 'wind_dir'].some(q => val(st, q) != null);
-  const hasWave = st => ['wave_height', 'wave_h10', 'wave_period'].some(q => val(st, q) != null);
+  const WINDQ = ['wind_speed', 'wind_gust', 'wind_dir'], WAVEQ = ['wave_height', 'wave_h10', 'wave_period'];
+  const hasWind = st => WINDQ.some(q => val(st, q) != null || st.measures?.includes(q));
+  const hasWave = st => WAVEQ.some(q => val(st, q) != null || st.measures?.includes(q));
 
   // ---------- Unités et échelles ----------
   const UNITS = {
@@ -386,7 +387,7 @@ footer a { color: var(--accent); }
       <td><span class="g">${wp != null ? wp.toFixed(1) : '–'}</span> <span class="sub">s</span></td>
       <td>${wd != null ? `<span class="dirc">${arrow}<span>${cardinal(wd)} <span class="m">${Math.round(wd)}°</span></span></span>` : '–'}</td>
       <td><span class="m">${wt != null ? wt.toFixed(1) + ' °C' : '–'}</span></td>
-      <td class="age opt">${t ? ago(t) : '–'}</td>
+      <td class="age opt">${t ? ago(t) : 'pas de donnée récente'}</td>
     </tr>`;
   }
 
@@ -407,7 +408,7 @@ footer a { color: var(--accent); }
       <td>${d != null ? `<span class="dirc">${arrow}<span>${cardinal(d)} <span class="m">${Math.round(d)}°</span></span></span>` : '–'}</td>
       <td>${ex ? `<span class="pill ${ex.cls}">${ex.name}</span>` : '–'}</td>
       <td class="opt"><span class="m">${at != null ? at.toFixed(1) + ' °C' : '–'}</span></td>
-      <td class="age opt">${times.length ? ago(times.at(-1)) : '–'}</td>
+      <td class="age opt">${times.length ? ago(times.at(-1)) : 'pas de donnée récente'}</td>
     </tr>`;
   }
 
