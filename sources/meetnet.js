@@ -8,8 +8,13 @@ import { toStandard } from '../lib/quantities.js';
 
 const BASE = 'https://api.meetnetvlaamsebanken.be';
 
-// Codes Meetnet connus (confirmés par l'intégration Home Assistant de Meetnet) : ils priment sur le classement par nom.
-const CODES = { WVC: 'wind_speed', WC3: 'wind_gust', WRS: 'wind_dir' };
+// Codes Meetnet relevés dans le catalogue (novembre 2026). Ils priment sur le classement par nom ;
+// null = paramètre volontairement ignoré (doublon moins utile pour le tableau).
+const CODES = {
+  WVC: 'wind_speed', WC3: 'wind_gust', WRS: 'wind_dir', WC1: null,
+  GHA: 'wave_height', GH1: 'wave_h10', GTZ: 'wave_period', RHF: 'wave_dir', H01: null, HLF: null, RLF: null,
+  TZW: 'water_temp', TLU: 'air_temp', LDR: 'air_pressure', WS5: 'water_level',
+};
 
 // Classement des paramètres Meetnet vers nos grandeurs, d'après leur nom anglais.
 // L'ordre compte : la première règle qui correspond gagne.
@@ -97,7 +102,7 @@ export default function createMeetnetSource(env) {
     for (const p of c.Parameters ?? []) {
       const name = msg(p.Name, 'en');
       const rule = RULES.find(([re]) => re.test(name));
-      params.set(p.ID, { name, unit: p.Unit, quantity: CODES[p.ID] ?? rule?.[1] ?? null });
+      params.set(p.ID, { name, unit: p.Unit, quantity: p.ID in CODES ? CODES[p.ID] : rule?.[1] ?? null });
     }
     const locations = new Map();
     for (const l of c.Locations ?? []) {
