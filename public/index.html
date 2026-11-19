@@ -152,11 +152,10 @@ table.readings { width: 100%; border-collapse: collapse; font-variant-numeric: t
 .tip .t { color: var(--muted); font-size: .72rem; margin-bottom: 3px; }
 .tip .r { display: flex; justify-content: space-between; gap: 14px; }
 .tip b { font-family: var(--font-display); font-size: .95rem; font-variant-numeric: tabular-nums; }
+.chart text.deg { font-size: 9px; font-variant-numeric: tabular-nums; }
 .chart text { font: 500 11px var(--font-body); fill: var(--muted); }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .8rem; color: var(--muted); }
 .legend i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
-.scale { display: flex; flex-wrap: wrap; gap: 6px; font-size: .75rem; color: var(--muted); align-items: center; }
-.scale span { padding: 2px 8px; border-radius: 6px; color: var(--surface); font-weight: 600; }
 footer { color: var(--muted); font-size: .8rem; display: grid; gap: 4px; }
 footer a { color: var(--accent); }
 @media (prefers-reduced-motion: no-preference) { .compass .arrow { transition: transform .6s ease; } }
@@ -231,8 +230,7 @@ footer a { color: var(--accent); }
   <footer>
     <div class="notice" id="demo-notice" hidden>Aperçu avec des données de démonstration. Une fois le serveur lancé avec un compte Meetnet, les vrais relevés remplacent ces valeurs.</div>
     <div class="sources" id="sources"></div>
-    <div class="scale" id="scale"></div>
-    <div>Direction : d'où vient le vent. Onshore, side-shore et offshore sont calculés pour la côte belge, orientée vers le nord-ouest. Toujours vérifier sur place avant d'aller à l'eau.</div>
+    <div>Direction : d'où vient le vent ou la houle, en degrés (0° = nord, 90° = est). Toujours vérifier sur place avant d'aller à l'eau.</div>
     <div id="attrib"></div>
   </footer>
 </div>
@@ -383,7 +381,6 @@ footer a { color: var(--accent); }
       <td class="st"><a href="#hist-wave-${esc(st.key.replace(':', '-'))}">${esc(st.name)}</a><small>${esc(src?.name ?? st.source)}</small></td>
       <td><span class="w">${wh != null ? wh.toFixed(2) : '–'}</span> <span class="sub">m</span></td>
       <td><span class="g">${wh10 != null ? wh10.toFixed(2) : '–'}</span> <span class="sub">m</span></td>
-      <td class="opt">${wh != null ? `<span class="pill band">${sea.name}</span>` : "–"}</td>
       <td><span class="g">${wp != null ? wp.toFixed(1) : '–'}</span> <span class="sub">s</span></td>
       <td>${wd != null ? `<span class="dirc">${arrow}<span>${cardinal(wd)} <span class="m">${Math.round(wd)}°</span></span></span>` : '–'}</td>
       <td><span class="m">${wt != null ? wt.toFixed(1) + ' °C' : '–'}</span></td>
@@ -405,7 +402,6 @@ footer a { color: var(--accent); }
       <td><span class="w">${fmtWind(s)}</span></td>
       <td><span class="g">${fmtWind(g)}</span></td>
       <td>${d != null ? `<span class="dirc">${arrow}<span>${cardinal(d)} <span class="m">${Math.round(d)}°</span></span></span>` : '–'}</td>
-      <td>${ex ? `<span class="pill ${ex.cls}">${ex.name}</span>` : '–'}</td>
       <td class="opt"><span class="m">${at != null ? at.toFixed(1) + ' °C' : '–'}</span></td>
       <td class="age opt">${times.length ? ago(times.at(-1)) : 'pas de donnée récente'}</td>
     </tr>`;
@@ -439,7 +435,7 @@ footer a { color: var(--accent); }
     const dirs = (st.series?.wind_dir || []).map(p => [new Date(p[0]).getTime(), p[1]]);
     if (avg.length < 2) return '<p class="sub">Pas d’historique de vent pour cette station.</p>';
 
-    const W = chartWidth(), L = 40, R = 12, T = 34, H = 230, B = 26;
+    const W = chartWidth(), L = 40, R = 12, T = 46, H = 242, B = 26;
     const t0 = Math.min(...avg.map(p => p[0])), t1 = Math.max(...avg.map(p => p[0]));
     const ymaxRaw = scale.wind != null ? conv(scale.wind) : Math.max(...avg.map(p => p[1]), ...gust.map(p => p[1]), 1);
     const step = state.unit === 'bft' ? 1 : niceStep(ymaxRaw * 1.1);
@@ -466,10 +462,14 @@ footer a { color: var(--accent); }
     // Flèches de direction toutes les heures, le long du haut
     let arrows = '';
     const ah = arrowHours() * hour;
+    const gap = (W - L - R) * ah / (t1 - t0 || 1), labelEvery = gap >= 26 ? 1 : gap >= 13 ? 2 : 3;
+    let nArrow = 0;
     for (let t = Math.ceil(t0 / ah) * ah; t <= t1; t += ah) {
       const d = dirs.reduce((best, p) => Math.abs(p[0] - t) < Math.abs((best?.[0] ?? Infinity) - t) ? p : best, null);
       if (!d || Math.abs(d[0] - t) > ah / 2) continue;
-      arrows += `<g transform="translate(${x(t)},16) rotate(${d[1] + 180})"><path d="M0,-8 L4,2 L1,1 L1,8 L-1,8 L-1,1 L-4,2 Z" fill="var(--muted)"/></g>`;
+      arrows += `<g transform="translate(${x(t)},13) rotate(${d[1] + 180})"><path d="M0,-8 L4,2 L1,1 L1,8 L-1,8 L-1,1 L-4,2 Z" fill="var(--muted)"/></g>`;
+      // Angle sous la flèche (une sur deux si les flèches sont trop serrées)
+      if (labelEvery === 1 || (++nArrow % labelEvery) === 1) arrows += `<text class="deg" x="${x(t)}" y="35" text-anchor="middle">${Math.round(d[1])}°</text>`;
     }
     const gustArea = gust.length > 1 ? `<path d="${path(gust)} L${x(gust.at(-1)[0])},${y(0)} L${x(gust[0][0])},${y(0)} Z" fill="var(--accent-soft)"/><path d="${path(gust)}" fill="none" stroke="var(--accent)" stroke-opacity=".45" stroke-width="1"/>` : '';
     const last = avg.at(-1);
@@ -481,7 +481,7 @@ footer a { color: var(--accent); }
       <line class="cursor" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--ink)" stroke-opacity=".45" visibility="hidden"/>
     </svg>`;
 
-    return `<div class="legend"><span><i style="background:var(--accent)"></i>Vent moyen</span><span><i style="background:var(--accent-soft)"></i>Rafales</span>${state.unit !== 'bft' ? '<span><i style="background:var(--good);opacity:.35"></i>Zone 12 à 18 nœuds</span>' : ''}<span>Flèches : sens du vent${arrowHours() < 1 ? ' toutes les ' + arrowHours() * 60 + ' min' : arrowHours() > 1 ? ' toutes les ' + arrowHours() + ' h' : ', chaque heure'}</span></div>
+    return `<div class="legend"><span><i style="background:var(--accent)"></i>Vent moyen</span><span><i style="background:var(--accent-soft)"></i>Rafales</span>${state.unit !== 'bft' ? '<span><i style="background:var(--good);opacity:.35"></i>Zone 12 à 18 nœuds</span>' : ''}<span>Flèches : sens du vent, angle : d'où il vient${arrowHours() < 1 ? ' toutes les ' + arrowHours() * 60 + ' min' : arrowHours() > 1 ? ' toutes les ' + arrowHours() + ' h' : ', chaque heure'}</span></div>
       <div class="label">Vent (${UNITS[state.unit].label}), ${periodLabel()}</div>
       <div class="chart-box">${windSvg}</div>`;
   }
@@ -539,7 +539,7 @@ footer a { color: var(--accent); }
     const shown = stations.filter(st => hasWind(st) && isVisible(st, 'wind'));
     const u = UNITS[state.unit].short;
     document.getElementById('grid').innerHTML = shown.length ? `<table class="readings">
-      <thead><tr><th class="st">Station</th><th>Vent ${u}</th><th>Rafales</th><th>Direction</th><th>Côte</th><th class="opt">Air</th><th class="opt">Relevé</th></tr></thead>
+      <thead><tr><th class="st">Station</th><th>Vent ${u}</th><th>Rafales</th><th>Direction</th><th class="opt">Air</th><th class="opt">Relevé</th></tr></thead>
       <tbody>${shown.map(row).join('')}</tbody></table>`
       : `<p class="sub" style="padding:12px 16px;margin:0">${lists.wind.length ? 'Aucune station de vent choisie. Ouvrez « Choisir les stations » ci-dessus.' : 'Aucune station de vent disponible.'}</p>`;
 
@@ -553,7 +553,7 @@ footer a { color: var(--accent); }
     // Houle : seulement les stations qui la mesurent, triées par hauteur (ou par nom).
     if (state.sort !== 'name') waveSt.sort((a, b) => (val(b, 'wave_height') ?? -1) - (val(a, 'wave_height') ?? -1));
     document.getElementById('waves').innerHTML = waveSt.length ? `<table class="readings">
-      <thead><tr><th class="st">Station</th><th class="nocase" title="Hauteur significative">Hs</th><th class="nocase" title="Hauteur moyenne des 10 % plus hautes vagues">H10%</th><th class="opt">Mer</th><th>Période</th><th>Direction</th><th>Eau</th><th class="opt">Relevé</th></tr></thead>
+      <thead><tr><th class="st">Station</th><th class="nocase" title="Hauteur significative">Hs</th><th class="nocase" title="Hauteur moyenne des 10 % plus hautes vagues">H10%</th><th>Période</th><th>Direction</th><th>Eau</th><th class="opt">Relevé</th></tr></thead>
       <tbody>${waveSt.map(waveRow).join('')}</tbody></table>`
       : `<p class="sub" style="padding:12px 16px;margin:0">${lists.wave.length ? 'Aucune station de houle choisie. Ouvrez « Choisir les stations » ci-dessus.' : 'Aucune station de houle disponible.'}</p>`;
     document.getElementById('history-waves').innerHTML = waveSt.map(st =>
@@ -561,8 +561,6 @@ footer a { color: var(--accent); }
     document.getElementById('wave-section').hidden = !waveSt.length;
     document.getElementById('history').parentElement.hidden = !shown.length;
 
-    document.getElementById('scale').innerHTML = '<span class="label" style="color:var(--muted);padding:0">Repères wingfoil</span>' +
-      BANDS.map((b, i) => `<span style="background:${b.color}">${b.name} ${i === 0 ? '< 8' : b.max === Infinity ? '> 32' : (BANDS[i - 1].max) + '–' + b.max} kn</span>`).join('');
   }
 
   // ---------- Interactions ----------
