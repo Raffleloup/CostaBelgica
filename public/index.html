@@ -404,7 +404,6 @@ footer a { color: var(--accent); }
       <td class="st"><a href="#${esc(anchor)}">${esc(st.name)}</a><small>${esc(src?.name ?? st.source)}</small></td>
       <td><span class="w">${fmtWind(s)}</span></td>
       <td><span class="g">${fmtWind(g)}</span></td>
-      <td class="opt">${s != null ? `<span class="pill band">${b.name}</span>` : ''}</td>
       <td>${d != null ? `<span class="dirc">${arrow}<span>${cardinal(d)} <span class="m">${Math.round(d)}°</span></span></span>` : '–'}</td>
       <td>${ex ? `<span class="pill ${ex.cls}">${ex.name}</span>` : '–'}</td>
       <td class="opt"><span class="m">${at != null ? at.toFixed(1) + ' °C' : '–'}</span></td>
@@ -540,7 +539,7 @@ footer a { color: var(--accent); }
     const shown = stations.filter(st => hasWind(st) && isVisible(st, 'wind'));
     const u = UNITS[state.unit].short;
     document.getElementById('grid').innerHTML = shown.length ? `<table class="readings">
-      <thead><tr><th class="st">Station</th><th>Vent ${u}</th><th>Rafales</th><th class="opt">Wingfoil</th><th>Direction</th><th>Côte</th><th class="opt">Air</th><th class="opt">Relevé</th></tr></thead>
+      <thead><tr><th class="st">Station</th><th>Vent ${u}</th><th>Rafales</th><th>Direction</th><th>Côte</th><th class="opt">Air</th><th class="opt">Relevé</th></tr></thead>
       <tbody>${shown.map(row).join('')}</tbody></table>`
       : `<p class="sub" style="padding:12px 16px;margin:0">${lists.wind.length ? 'Aucune station de vent choisie. Ouvrez « Choisir les stations » ci-dessus.' : 'Aucune station de vent disponible.'}</p>`;
 
