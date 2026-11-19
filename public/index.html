@@ -116,6 +116,14 @@ table.readings { width: 100%; border-collapse: collapse; font-variant-numeric: t
 .now-sub { font: 600 .75rem var(--font-body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
 .section-title { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; margin: 8px 0 0; }
 .history-title { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; margin: 4px 0 0; }
+.hist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.seg.mini button { padding: 4px 9px; font-size: .75rem; }
+.list-box { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.list-box table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: .85rem; }
+.list-box th { position: sticky; top: 0; background: var(--surface); text-align: left; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.list-box td { padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.list-box tr:last-child td { border-bottom: 0; }
+.list-box td.n { font-family: var(--font-display); font-size: .95rem; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .card {
@@ -243,7 +251,7 @@ footer a { color: var(--accent); }
     get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
-  const state = { unit: store.get('mm-unit', 'kn'), sort: store.get('mm-sort', 'wind'), vis: { wind: loadVisible('wind'), wave: loadVisible('wave') }, hours: [3, 6, 12, 24, 48, 72, 168].includes(+store.get('mm-hours', 24)) ? +store.get('mm-hours', 24) : 24, data: null, demo: false };
+  const state = { unit: store.get('mm-unit', 'kn'), sort: store.get('mm-sort', 'wind'), vis: { wind: loadVisible('wind'), wave: loadVisible('wave') }, hours: [3, 6, 12, 24, 48, 72, 168].includes(+store.get('mm-hours', 24)) ? +store.get('mm-hours', 24) : 24, data: null, demo: false, view: (() => { try { return JSON.parse(store.get('mm-view', '{}')) || {}; } catch { return {}; } })() };
 
   // Stations choisies : liste de clés mémorisée ; null = toutes.
   // Deux listes indépendantes : stations de vent et stations de houle.
@@ -509,6 +517,35 @@ footer a { color: var(--accent); }
       <path d="${wp}" fill="none" stroke="var(--light)" stroke-width="2"/>${h10Line}<circle cx="${x(last[0])}" cy="${yw(last[1])}" r="4" fill="var(--light)"/><line class="cursor" x1="0" x2="0" y1="10" y2="${WH - B}" stroke="var(--ink)" stroke-opacity=".45" visibility="hidden"/></svg></div>`;
   }
 
+  // ---------- Vue « tableau » d'un historique (bascule graphique / tableau) ----------
+  function viewToggle(id) {
+    const v = state.view[id] ?? 'chart';
+    return `<div class="seg mini" role="group" aria-label="Affichage" data-view="${esc(id)}">
+      <button type="button" data-v="chart" aria-pressed="${v === 'chart'}">Graphique</button><button type="button" data-v="table" aria-pressed="${v === 'table'}">Tableau</button></div>`;
+  }
+  function listTable(st, cols) {
+    const rows = new Map();
+    for (const c of cols) for (const [t, v] of st.series?.[c.q] || []) {
+      const k = new Date(t).getTime();
+      if (!rows.has(k)) rows.set(k, {});
+      rows.get(k)[c.q] = v;
+    }
+    if (!rows.size) return '<p class="sub">Pas de relevés sur cette période.</p>';
+    const fmt = state.hours <= 12 ? fmtTime : fmtDay;
+    const body = [...rows.entries()].sort((a, b) => b[0] - a[0]).map(([t, r]) =>
+      `<tr><td>${fmt.format(new Date(t))}</td>${cols.map(c => `<td class="n">${r[c.q] != null ? c.f(r[c.q]) : '–'}</td>`).join('')}</tr>`).join('');
+    return `<div class="list-box"><table><thead><tr><th>Heure</th>${cols.map(c => `<th>${c.label}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+  const windList = st => listTable(st, [
+    { q: 'wind_speed', label: `Vent ${UNITS[state.unit].short}`, f: fmtWind },
+    { q: 'wind_gust', label: 'Rafales', f: fmtWind },
+    { q: 'wind_dir', label: 'Direction', f: d => `${cardinal(d)} ${Math.round(d)}°` },
+  ]);
+  const waveList = st => listTable(st, [
+    { q: 'wave_height', label: 'Hs (m)', f: v => v.toFixed(2) },
+    { q: 'wave_h10', label: 'H10% (m)', f: v => v.toFixed(2) },
+  ]);
+
   function render() {
     const d = state.data;
     hideTip();
@@ -548,7 +585,7 @@ footer a { color: var(--accent); }
     const maxOf = (list, q) => Math.max(0, ...list.flatMap(st => (st.series?.[q] || []).map(p => p[1])));
     const scale = { wind: Math.max(maxOf(shown, 'wind_speed'), maxOf(shown, 'wind_gust'), 1), wave: Math.max(maxOf(waveSt, 'wave_height'), maxOf(waveSt, 'wave_h10')) || null };
     document.getElementById('history').innerHTML = shown.map(st =>
-      `<article class="detail" id="hist-wind-${esc(st.key.replace(':', '-'))}"><h3 class="history-title">${esc(st.name)}</h3>${chart(st, scale)}</article>`).join('');
+      `<article class="detail" id="hist-wind-${esc(st.key.replace(':', '-'))}"><div class="hist-head"><h3 class="history-title">${esc(st.name)}</h3>${viewToggle('wind:' + st.key)}</div>${state.view['wind:' + st.key] === 'table' ? windList(st) : chart(st, scale)}</article>`).join('');
 
     // Houle : seulement les stations qui la mesurent, triées par hauteur (ou par nom).
     if (state.sort !== 'name') waveSt.sort((a, b) => (val(b, 'wave_height') ?? -1) - (val(a, 'wave_height') ?? -1));
@@ -557,7 +594,7 @@ footer a { color: var(--accent); }
       <tbody>${waveSt.map(waveRow).join('')}</tbody></table>`
       : `<p class="sub" style="padding:12px 16px;margin:0">${lists.wave.length ? 'Aucune station de houle choisie. Ouvrez « Choisir les stations » ci-dessus.' : 'Aucune station de houle disponible.'}</p>`;
     document.getElementById('history-waves').innerHTML = waveSt.map(st =>
-      `<article class="detail" id="hist-wave-${esc(st.key.replace(':', '-'))}"><h3 class="history-title">${esc(st.name)}</h3>${waveChart(st, scale)}</article>`).join('');
+      `<article class="detail" id="hist-wave-${esc(st.key.replace(':', '-'))}"><div class="hist-head"><h3 class="history-title">${esc(st.name)}</h3>${viewToggle('wave:' + st.key)}</div>${state.view['wave:' + st.key] === 'table' ? waveList(st) : waveChart(st, scale)}</article>`).join('');
     document.getElementById('wave-section').hidden = !waveSt.length;
     document.getElementById('history').parentElement.hidden = !shown.length;
 
@@ -593,6 +630,13 @@ footer a { color: var(--accent); }
     vis.has(t.dataset.key) ? vis.delete(t.dataset.key) : vis.add(t.dataset.key);
     state.vis[kind] = all.every(k => vis.has(k)) ? null : vis;
     saveVisible(kind); render();
+  });
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.seg.mini[data-view] button'); if (!btn) return;
+    const id = btn.parentElement.dataset.view;
+    if (btn.dataset.v === 'table') state.view[id] = 'table'; else delete state.view[id];
+    store.set('mm-view', JSON.stringify(state.view));
+    render();
   });
   document.getElementById('refresh').addEventListener('click', load);
   // ---------- Infobulle sur les graphiques (souris, doigt ou stylet) ----------
